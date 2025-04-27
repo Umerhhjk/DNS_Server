@@ -6,14 +6,14 @@ from dns_parser import parse_dns_query
 from db_handler import DNSDatabase
 
 class DNSServer:
-    def __init__(self, host='0.0.0.0', port=53):
+    def __init__(self, host='127.0.0.1', port=53):
         self.host = host
         self.port = port
         self.db = DNSDatabase()
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind((self.host, self.port))
         self.running = True
-        print(f"DNS Server running on {self.host}:{self.port}")
+        print(f"DNS Server Running on {self.host}:{self.port}")
 
     def start(self):
         while self.running:
@@ -25,12 +25,10 @@ class DNSServer:
                     continue
                 print(f"\nReceived query from {addr[0]}:{addr[1]}")
                 
-                # Parse the DNS query
                 query_id, domain = parse_dns_query(data)
                 print(f"Query ID: {query_id}")
                 print(f"Domain: {domain}")
                 
-                # Look up the domain in the database
                 ip_address = self.db.lookup_domain(domain)
                 
                 if ip_address:
@@ -52,17 +50,14 @@ class DNSServer:
         self.running = False
 
     def handle_query(self, data):
-        # Parse the DNS query
         query_id, domain = parse_dns_query(data)
         
-        # Look up the domain in the database
         ip_address = self.db.lookup_domain(domain)
         
         if ip_address:
             # Create a response with the IP address
             response = self.create_response(data, query_id, domain, ip_address)
         else:
-            # Create a response indicating domain not found
             response = self.create_not_found_response(data, query_id)
         
         return response
@@ -85,8 +80,8 @@ class DNSServer:
         
         # Update the header
         # Set QR=1 (Response), AA=1 (Authoritative), RA=1 (Recursion Available)
-        response[2] = 0x84  # 1000 0100
-        response[3] = 0x80  # 1000 0000
+        response[2] = 0x84
+        response[3] = 0x80
         
         # Set the number of answers to 1
         response[6] = 0x00
@@ -119,9 +114,9 @@ class DNSServer:
     def create_not_found_response(self, original_query, query_id):
         response = bytearray(original_query)
         # Set QR=1 (Response), AA=1 (Authoritative)
-        response[2] = 0x84  # 1000 0100
+        response[2] = 0x84
         # Set RCODE=3 (Name Error)
-        response[3] = 0x83  # 1000 0011
+        response[3] = 0x83
         return bytes(response)
 
 if __name__ == "__main__":
