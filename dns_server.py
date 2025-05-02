@@ -81,12 +81,21 @@ class DNSServer:
         
         # Update the header
         # Set QR=1 (Response), AA=1 (Authoritative), RA=1 (Recursion Available)
-        response[2] = 0x84
-        response[3] = 0x80
+        response[2] = 0x84  # QR=1, AA=1
+        response[3] = 0x80  # RA=1
         
         # Set the number of answers to 1
         response[6] = 0x00
         response[7] = 0x01
+        
+        # Find the end of the question section
+        question_end = 12  # Start after header
+        while response[question_end] != 0:
+            question_end += response[question_end] + 1
+        question_end += 5  # Include the final null byte and QTYPE/QCLASS
+        
+        # Keep only the header and question section
+        response = response[:question_end]
         
         # Convert IP address to bytes
         ip_bytes = bytes([int(x) for x in ip_address.split('.')])
@@ -113,11 +122,26 @@ class DNSServer:
         return bytes(response)
 
     def create_not_found_response(self, original_query, query_id):
+        """
+        Create a DNS response packet for when the domain is not found.
+        """
         response = bytearray(original_query)
+        
         # Set QR=1 (Response), AA=1 (Authoritative)
         response[2] = 0x84
+        
         # Set RCODE=3 (Name Error)
         response[3] = 0x83
+        
+        # Find the end of the question section
+        question_end = 12  # Start after header
+        while response[question_end] != 0:
+            question_end += response[question_end] + 1
+        question_end += 5  # Include the final null byte and QTYPE/QCLASS
+        
+        # Keep only the header and question section
+        response = response[:question_end]
+        
         return bytes(response)
 
 if __name__ == "__main__":
