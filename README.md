@@ -31,12 +31,24 @@ dig @localhost example.com
 
 **Sample Output (Bash/Linux/macOS):**
 ```bash
-$ nslookup google.com 127.0.0.1
-Server:         127.0.0.1
-Address:        127.0.0.1#53
+$ dig @localhost example.com
 
-Name:   google.com
-Address: 142.250.190.78
+; <<>> DiG 9.18.1 <<>> @localhost example.com
+; (1 server found)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 12345
+;; flags: qr aa rd; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;example.com.                  IN      A
+
+;; ANSWER SECTION:
+example.com.            3600    IN      A       192.168.1.100
+
+;; Query time: 1 msec
+;; SERVER: 127.0.0.1#53(localhost)
+;; WHEN: Thu Mar 14 15:30:45 UTC 2024
+;; MSG SIZE  rcvd: 56
 ```
 ```cmd
 nslookup google.com 127.0.0.1
