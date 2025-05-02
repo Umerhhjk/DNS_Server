@@ -21,7 +21,6 @@ class DNSDatabase:
 
     def validate_domain(self, domain):
         """Validate domain name format."""
-        # Basic domain name validation
         domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$'
         if not re.match(domain_pattern, domain):
             logging.warning(f"Invalid domain name format: {domain}")
@@ -30,13 +29,11 @@ class DNSDatabase:
 
     def validate_ip(self, ip_address):
         """Validate IP address format."""
-        # Basic IP address validation
         ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
         if not re.match(ip_pattern, ip_address):
             logging.warning(f"Invalid IP address format: {ip_address}")
             return False
         
-        # Check if each octet is between 0 and 255
         try:
             octets = ip_address.split('.')
             return all(0 <= int(octet) <= 255 for octet in octets)
