@@ -1,9 +1,10 @@
 import socket
-import struct
-import threading
 import sys
-from dns_parser import parse_dns_query
+import threading
+
 from db_handler import DNSDatabase
+from dns_parser import parse_dns_query
+
 
 class DNSServer:
     def __init__(self, host='127.0.0.1', port=53):
