@@ -73,7 +73,6 @@ Project for Computer Networks
 Here are some improvements and features that can be added to this DNS server:
 
 - **Support for more record types:** Add support for AAAA (IPv6), MX (mail), CNAME, TXT, PTR, and other DNS record types.
-- **Reverse DNS (PTR) support:** Allow the server to answer reverse lookup queries (e.g., `in-addr.arpa`).
 - **Zone file import/export:** Allow importing/exporting DNS records from standard zone files.
 - **Web or CLI management interface:** Provide a user-friendly way to add, remove, or update DNS records.
 - **DNSSEC support:** Implement DNS Security Extensions for secure DNS responses.
