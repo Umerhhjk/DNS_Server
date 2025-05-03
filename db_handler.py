@@ -11,54 +11,44 @@ class DNSDatabase:
         self.init_db()
 
     def setup_logging(self):
-        """Setup logging configuration for invalid queries."""
-        logging.basicConfig(
-            filename='invalid_queries.log',
-            level=logging.WARNING,
-            format='%(asctime)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
+        """Setup logging configuration for cached responses."""
+        self.cache_logger = logging.getLogger('cache_logger')
+        self.cache_logger.setLevel(logging.INFO)
+        cache_handler = logging.FileHandler('cached.log', mode='a')
+        cache_formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        cache_handler.setFormatter(cache_formatter)
+        self.cache_logger.addHandler(cache_handler)
+        self.cache_logger.propagate = False
 
     def validate_domain(self, domain):
         """Validate domain name format."""
-        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$'
-        if not re.match(domain_pattern, domain):
-            logging.warning(f"Invalid domain name format: {domain}")
-            return False
-        return True
+        # Accept both regular domains and reverse DNS queries
+        domain_pattern = r'^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+|(\d{1,3}\.){3}\d{1,3}\.in-addr\.arpa)$'
+        return bool(re.match(domain_pattern, domain))
 
     def validate_ip(self, ip_address):
         """Validate IP address format."""
         ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
         if not re.match(ip_pattern, ip_address):
-            logging.warning(f"Invalid IP address format: {ip_address}")
             return False
         
         try:
             octets = ip_address.split('.')
             return all(0 <= int(octet) <= 255 for octet in octets)
         except ValueError:
-            logging.warning(f"Invalid IP address format: {ip_address}")
             return False
 
     def validate_record_type(self, record_type):
         """Validate DNS record type."""
         valid_types = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS']
-        if record_type not in valid_types:
-            logging.warning(f"Invalid record type: {record_type}")
-            return False
-        return True
+        return record_type in valid_types
 
     def validate_ttl(self, ttl):
         """Validate TTL value."""
         try:
             ttl = int(ttl)
-            if ttl < 0 or ttl > 2147483647:  # Max 32-bit integer
-                logging.warning(f"Invalid TTL value: {ttl}")
-                return False
-            return True
+            return 0 <= ttl <= 2147483647  # Max 32-bit integer
         except ValueError:
-            logging.warning(f"Invalid TTL value: {ttl}")
             return False
 
     def init_db(self):
@@ -121,6 +111,8 @@ class DNSDatabase:
                 VALUES (?, ?, ?, ?)
             ''', (domain, ip_address, record_type, ttl))
             conn.commit()
+            # Log the cached response using the cache logger
+            self.cache_logger.info(f"Cached response for {domain} -> {ip_address}")
             return True
         finally:
             conn.close()
@@ -160,5 +152,24 @@ class DNSDatabase:
         try:
             cursor.execute('SELECT * FROM dns_records')
             return cursor.fetchall()
+        finally:
+            conn.close()
+
+    def clear_forwarded_responses(self):
+        """Clear all records that were added through forwarding."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        try:
+            # Delete all records except the sample records
+            cursor.execute('''
+                DELETE FROM dns_records 
+                WHERE domain NOT IN (
+                    'example.com', 'test.local', 'dev.net',
+                    'google.com', 'www.google.com',
+                    'facebook.com', 'www.facebook.com'
+                )
+            ''')
+            conn.commit()
+            print("Cleared all forwarded responses from database")
         finally:
             conn.close() 

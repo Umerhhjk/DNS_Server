@@ -7,14 +7,18 @@ from dns_parser import parse_dns_query
 
 
 class DNSServer:
-    def __init__(self, host='127.0.0.1', port=53):
+    def __init__(self, host='127.0.0.1', port=53, forward_dns='8.8.8.8', forward_port=53):
         self.host = host
         self.port = port
+        self.forward_dns = forward_dns
+        self.forward_port = forward_port
         self.db = DNSDatabase()
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind((self.host, self.port))
         self.running = True
+        
         print(f"DNS Server Running on {self.host}:{self.port}")
+        print(f"Forwarding unknown queries to {self.forward_dns}:{self.forward_port}")
 
     def start(self):
         while self.running:
@@ -27,17 +31,30 @@ class DNSServer:
                 print(f"\nReceived query from {addr[0]}:{addr[1]}")
                 
                 query_id, domain = parse_dns_query(data)
+                if domain is None:  # Invalid query was logged by parser
+                    response = self.create_not_found_response(data, query_id)
+                    self.socket.sendto(response, addr)
+                    continue
+                    
                 print(f"Query ID: {query_id}")
                 print(f"Domain: {domain}")
                 
+                # First try local database
                 ip_address = self.db.lookup_domain(domain)
                 
                 if ip_address:
-                    print(f"Found IP: {ip_address}")
+                    print(f"Found IP in local database: {ip_address}")
                     response = self.create_response(data, query_id, domain, ip_address)
                 else:
-                    print("Domain not found")
-                    response = self.create_not_found_response(data, query_id)
+                    print(f"Domain not found in local database, forwarding to {self.forward_dns}")
+                    try:
+                        response = self.forward_query(data)
+                        print("Received response from forward DNS server")
+                        # Store the forwarded response in database
+                        self.store_forwarded_response(domain, response)
+                    except Exception as e:
+                        print(f"Error forwarding query: {e}")
+                        response = self.create_not_found_response(data, query_id)
                 
                 self.socket.sendto(response, addr)
                 print(f"Sent response to {addr[0]}:{addr[1]}")
@@ -47,21 +64,81 @@ class DNSServer:
         self.socket.close()
         print("DNS Server shut down.")
 
+    def store_forwarded_response(self, domain, response):
+        """
+        Store a forwarded DNS response in the database and log it.
+        
+        Args:
+            domain (str): The domain name
+            response (bytes): The DNS response packet
+        """
+        try:
+            # Extract IP address from the response packet
+            # The IP address is in the last 4 bytes of the response
+            ip_bytes = response[-4:]
+            ip_address = '.'.join(str(b) for b in ip_bytes)
+            
+            # Store in database (logging is handled by the database)
+            if self.db.add_record(domain, ip_address):
+                print(f"Stored forwarded response for {domain} -> {ip_address} in database")
+        except Exception as e:
+            print(f"Error storing forwarded response: {e}")
+
     def stop(self):
         self.running = False
+        # Clear all forwarded responses from database
+        self.db.clear_forwarded_responses()
+        print("Cleared forwarded responses from database")
 
     def handle_query(self, data):
         query_id, domain = parse_dns_query(data)
         
+        # First try local database
         ip_address = self.db.lookup_domain(domain)
         
         if ip_address:
             # Create a response with the IP address
             response = self.create_response(data, query_id, domain, ip_address)
         else:
-            response = self.create_not_found_response(data, query_id)
+            # If not found locally, try forwarding
+            try:
+                response = self.forward_query(data)
+            except Exception as e:
+                print(f"Error forwarding query: {e}")
+                response = self.create_not_found_response(data, query_id)
         
         return response
+
+    def forward_query(self, query_data):
+        """
+        Forward a DNS query to another DNS server.
+        
+        Args:
+            query_data (bytes): The original DNS query packet
+            
+        Returns:
+            bytes: The response from the forwarded DNS server
+        """
+        forward_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        forward_socket.settimeout(5.0)  # 5 second timeout for forwarding
+        
+        try:
+            # Send query to forward DNS server
+            forward_socket.sendto(query_data, (self.forward_dns, self.forward_port))
+            print(f"Forwarded query to {self.forward_dns}:{self.forward_port}")
+            
+            # Receive response
+            response, _ = forward_socket.recvfrom(512)
+            return response
+            
+        except socket.timeout:
+            print("Timeout while waiting for forward DNS response")
+            raise
+        except Exception as e:
+            print(f"Error during forwarding: {e}")
+            raise
+        finally:
+            forward_socket.close()
 
     def create_response(self, original_query, query_id, domain, ip_address):
         """
